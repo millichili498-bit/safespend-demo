@@ -11,6 +11,8 @@
   const DEMO_COUNT_KEY = STORAGE_KEY + ".spendcount";
   const BACKUP_KEY = STORAGE_KEY + ".pre-v2-backup";
   const APP_VERSION = "2.0.0";
+  const VIEW_ONLY = EDITION === "demo" && CFG.viewOnly === true;
+  const VIEW_ONLY_ALLOWED = ["nav", "more", "close-more", "horizon", "close", "expense-range", "bill-filter", "cal-prev", "cal-next", "cal-today", "debt-strategy", "reset-next", "reset-back"];
   const CURRENCIES = {
     USD: { symbol: "$", label: "US dollar" },
     CAD: { symbol: "CA$", label: "Canadian dollar" },
@@ -44,6 +46,7 @@
   };
 
   let state = load();
+  if (VIEW_ONLY) { loadDemo(); state.settings.lastExport = todayISO(); }
 
   function uid() {
     return Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
@@ -207,6 +210,7 @@
     }
   }
   function save() {
+    if (VIEW_ONLY) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
   function commit() {
@@ -830,6 +834,8 @@
     } else if (type === "pcamount") {
       const cur = state.paycheckPlan.amounts[extra.date];
       ui.modal = { type: "pcamount", title: "Paycheck on " + formatDate(extra.date), body: '<input type="hidden" name="date" value="' + esc(extra.date) + '">' + field("amount", "Take-home amount", cur != null ? cur : "", 'inputmode="decimal" placeholder="' + esc(String(usualPaycheck() || "")) + '"') + '<p class="help">Leave blank to use your usual pay of ' + money(usualPaycheck()) + ".</p>" };
+    } else if (type === "viewonly") {
+      ui.modal = { type: "viewonly", title: "View-only demo", noSubmit: true, body: "<p>This is a view-only demo with sample data. Get the full SafeSpend app to track your own money.</p><div class=\"actions\"><a class=\"btn btn-primary\" href=\"" + esc(LISTING_URL) + "\" target=\"_blank\" rel=\"noopener\">Get the full SafeSpend app</a></div>" };
     } else if (type === "demolimit") {
       ui.modal = { type: "demolimit", title: "You’ve reached the demo limit", noSubmit: true, body: "<p>The demo includes " + DEMO_LIMIT + " practice spends, and you’ve used them all. Everything else still works, so you can keep looking around.</p><p class=\"meta\" style=\"margin-top:8px\">The full SafeSpend app has no limits, installs on your phone or computer, and works offline.</p><div class=\"actions\"><a class=\"btn btn-primary\" href=\"" + esc(LISTING_URL) + "\" target=\"_blank\" rel=\"noopener\">Get the full version on Etsy</a></div>" };
     } else if (type === "confirm") {
@@ -861,6 +867,7 @@
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
     const action = btn.dataset.action;
+    if (VIEW_ONLY && VIEW_ONLY_ALLOWED.indexOf(action) < 0) { ui.moreOpen = false; openModal("viewonly"); return; }
     if (action === "close-more") { ui.moreOpen = false; render(); return; }
     if (action === "more") { ui.moreOpen = !ui.moreOpen; render(); return; }
     if (action === "nav") { ui.view = btn.dataset.view; ui.moreOpen = false; ui.modal = null; if (ui.view === "reset") { ui.resetStep = 0; ui.resetDraft = null; } render(); return; }
@@ -923,6 +930,7 @@
     const form = e.target.closest("form[data-form]");
     if (!form) return;
     e.preventDefault();
+    if (VIEW_ONLY) { openModal("viewonly"); return; }
     const data = Object.fromEntries(new FormData(form).entries());
     const type = form.dataset.form;
     if (type === "expense") return saveExpense(data);
@@ -949,6 +957,7 @@
       const amt = t.form.querySelector('[name="amount"]');
       if (bill && amt) amt.value = bill.amount;
     }
+    if (VIEW_ONLY && (t.dataset.setting || t.dataset.plan || t.dataset.debtplan || t.id === "import-file")) { openModal("viewonly"); return; }
     if (t.dataset.setting) {
       const key = t.dataset.setting;
       let value = t.value;
@@ -1720,6 +1729,7 @@
   }
   function demoCountUp() { if (EDITION === "demo") { try { localStorage.setItem(DEMO_COUNT_KEY, String(demoCount() + 1)); } catch (e) {} } }
   function demoBanner() {
+    if (VIEW_ONLY) return '<div class="demo-banner" role="note"><div><strong>View-only demo</strong> · sample data · <a class="demo-link" href="' + esc(LISTING_URL) + '" target="_blank" rel="noopener">Get the full app</a></div></div>';
     if (EDITION !== "demo") return "";
     const left = demoLeft();
     return '<div class="demo-banner" role="note"><div><strong>Demo version</strong> · ' + (left > 0 ? left + " of " + DEMO_LIMIT + " practice spends left" : "You’ve used all " + DEMO_LIMIT + " practice spends") + '</div><a class="demo-link" href="' + esc(LISTING_URL) + '" target="_blank" rel="noopener">Get the full app</a></div>';
